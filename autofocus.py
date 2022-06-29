@@ -34,8 +34,8 @@ def laplacian(img):
 # Defaults to 1280x720 @ 60fps
 # Flip the image by setting the flip_method (most common values: 0 and 2)
 # display_width and display_height determine the size of the window on the screen
-def gstreamer_pipeline (capture_width=1280, capture_height=720, display_width=1280,
-                        display_height=720, framerate=60, flip_method=0) :
+def gstreamer_pipeline(capture_width=1280, capture_height=720, display_width=1280,
+                       display_height=720, framerate=60, flip_method=0):
     return ('nvarguscamerasrc ! '
     'video/x-raw(memory:NVMM), '
     'width=(int)%d, height=(int)%d, '
@@ -54,8 +54,16 @@ def show_camera():
     focal_distance = 10
     focus_finished = False
     # To flip the image, modify the flip_method parameter (0 and 2 are the most common)
-    print(gstreamer_pipeline(flip_method=0))
-    cap = cv.VideoCapture(gstreamer_pipeline(flip_method=0), cv.CAP_GSTREAMER)
+    multiplier = 2
+    display_width, display_height = 320 * multiplier, 180 * multiplier
+    capture_width, capture_height = 320 * multiplier, 180 * multiplier  # 320, 180
+    # width, height = 1280, 720
+    fr = 60
+    gp = gstreamer_pipeline(capture_width=capture_width, capture_height=capture_height,
+                            display_width=display_width, display_height=display_height,
+                            framerate=fr, flip_method=0)
+    print(gp)
+    cap = cv.VideoCapture(gp, cv.CAP_GSTREAMER)
     if cap.isOpened():
         window_handle = cv.namedWindow('CSI Camera', cv.WINDOW_AUTOSIZE)
         # Window
@@ -69,7 +77,7 @@ def show_camera():
                 print("Val: %f"%(focal_distance))
                 #Take image and calculate image clarity
                 val = laplacian(img)
-                #Find the maximum image clarity
+                # Find the maximum image clarity
                 if val > max_value:
                     max_index = focal_distance
                     max_value = val
@@ -118,10 +126,12 @@ def capture_images():
     # To flip the image, modify the flip_method parameter (0 and 2 are the most common)
     # width, height = 3264, 1848
     # fr = 21
-    width, height = 1280, 720
+    display_width, display_height = 640, 360
+    capture_width, capture_height = 640, 360  # 320, 180
+    # width, height = 1280, 720
     fr = 60
-    cap = cv.VideoCapture(gstreamer_pipeline(capture_width=width, capture_height=height,
-                                             display_width=width, display_height=height,
+    cap = cv.VideoCapture(gstreamer_pipeline(capture_width=capture_width, capture_height=capture_height,
+                                             display_width=display_width, display_height=display_height,
                                              framerate=fr, flip_method=0),
                           cv.CAP_GSTREAMER)
     try:
