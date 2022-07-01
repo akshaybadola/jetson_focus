@@ -8,8 +8,8 @@
 import cv2
 import numpy as py
 import os
+import time
 from Focuser import Focuser
-
 
 def focusing(focuser, val):
     # value = (val << 4) & 0x3ff0
@@ -49,7 +49,7 @@ def gstreamer_pipeline(capture_width=640, capture_height=360, display_width=640,
 
 
 def show_camera(focuser):
-    max_index = 10
+    max_index = 0
     max_value = 0.0
     last_value = 0.0
     dec_count = 0
@@ -59,12 +59,13 @@ def show_camera(focuser):
     display_width, display_height = 320 * multiplier, 180 * multiplier
     capture_width, capture_height = 320 * multiplier, 180 * multiplier  # 320, 180
     # width, height = 1280, 720
-    fr = 60
+    fr = 100
     # To flip the image, modify the flip_method parameter (0 and 2 are the most common)
     gp = gstreamer_pipeline(capture_width=capture_width, capture_height=capture_height,
                             display_width=display_width, display_height=display_height,
                             framerate=fr, flip_method=0)
     print(gp)
+    start = time.time()
     cap = cv2.VideoCapture(gp, cv2.CAP_GSTREAMER)
     focusing(focuser, focal_distance)
     min_skip_frame = 6
@@ -77,7 +78,7 @@ def show_camera(focuser):
             cv2.imshow('CSI Camera', img)
             if skip_frame == 0:
                 skip_frame = min_skip_frame
-                if dec_count < 6 and focal_distance < 1000:
+                if dec_count < 4 and focal_distance < 1000:
                     # Adjust focus
                     focusing(focuser, focal_distance)
                     # Take image and calculate image clarity
@@ -95,13 +96,15 @@ def show_camera(focuser):
                     if dec_count < 6:
                         last_value = val
                         # Increase the focal distance
-                        focal_distance += 5
+                        focal_distance += 10
                 elif not focus_finished:
                     # Adjust focus to the best
                     focusing(focuser, max_index)
                     focus_finished = True
+                    stop = time.time()
+                    print("Time taken to find focus:", stop - start)
             else:
-                skip_frame = skip_frame - 1
+                skip_frame = skip_frame - 2
             if not focus_finished:
                 print("skip frame", skip_frame)
             # This also acts as
