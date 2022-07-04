@@ -11,6 +11,7 @@ import os
 import time
 from Focuser import Focuser
 
+
 def focusing(focuser, val):
     # value = (val << 4) & 0x3ff0
     # data1 = (value >> 8) & 0x3f
@@ -48,28 +49,77 @@ def gstreamer_pipeline(capture_width=640, capture_height=360, display_width=640,
     'video/x-raw, format=(string)BGR ! appsink'  % (capture_width,capture_height,framerate,flip_method,display_width,display_height))
 
 
-def show_camera(focuser):
-    max_index = 0
+def init_vars():
+    max_index = 10
     max_value = 0.0
     last_value = 0.0
     dec_count = 0
     focal_distance = 10
     focus_finished = False
+    prev_img = None
     multiplier = 1
-    display_width, display_height = 320 * multiplier, 180 * multiplier
-    capture_width, capture_height = 320 * multiplier, 180 * multiplier  # 320, 180
+    # width, height
+    display_specs = [320 * multiplier, 180 * multiplier]
+    capture_specs = [320 * multiplier, 180 * multiplier]
     # width, height = 1280, 720
-    fr = 100
+    fr = 60
+    
+    return max_index, max_value, last_value, dec_count, focal_distance, focus_finished, display_specs, capture_specs, fr, prev_img
+    
+
+def check_image_clarity(img, dec_count, focal_distance, max_value, max_index, last_value, focus_finished, prev_img):
+    if dec_count < 6 and focal_distance < 1000:
+        # Adjust focus
+        focusing(focuser, focal_distance)
+        # Take image and calculate image clarity
+        val = laplacian(img)
+        # Find the maximum image clarity
+        if val > max_value:
+            max_index = focal_distance
+            max_value = val
+        # If the image clarity starts to decrease
+        if val < last_value:
+            dec_count += 1
+        else:
+            dec_count = 0
+        # Image clarity is reduced by six consecutive frames
+        if dec_count < 6:
+            last_value = val
+            # Increase the focal distance
+            focal_distance += 10
+    elif not focus_finished:
+        # Adjust focus to the best
+        focusing(focuser, max_index)
+        focus_finished = True
+        prev_img = img
+
+    return dec_count, focal_distance, max_value, max_index, last_value, focus_finished, prev_img
+
+
+def check_image_change(img, prev_img):
+    change = None
+
+    if prev_img.any():
+        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        prev_gray_img = cv2.cvtColor(prev_img, cv2.COLOR_BGR2GRAY)
+        change = cv2.absdiff(prev_gray_img, gray_img)
+
+    return change
+
+def show_camera(focuser):
+    max_index, max_value, last_value, dec_count, focal_distance, focus_finished, display_specs, capture_specs, fr, prev_img = init_vars()
+
     # To flip the image, modify the flip_method parameter (0 and 2 are the most common)
-    gp = gstreamer_pipeline(capture_width=capture_width, capture_height=capture_height,
-                            display_width=display_width, display_height=display_height,
+    gp = gstreamer_pipeline(capture_width=capture_specs[0], capture_height=capture_specs[1],
+                            display_width=display_specs[0], display_height=display_specs[1],
                             framerate=fr, flip_method=0)
     print(gp)
-    start = time.time()
+
     cap = cv2.VideoCapture(gp, cv2.CAP_GSTREAMER)
     focusing(focuser, focal_distance)
-    min_skip_frame = 6
+    min_skip_frame = 3
     skip_frame = min_skip_frame
+
     if cap.isOpened():
         window_handle = cv2.namedWindow('CSI Camera', cv2.WINDOW_AUTOSIZE)
         # Window
@@ -78,35 +128,22 @@ def show_camera(focuser):
             cv2.imshow('CSI Camera', img)
             if skip_frame == 0:
                 skip_frame = min_skip_frame
-                if dec_count < 4 and focal_distance < 1000:
-                    # Adjust focus
-                    focusing(focuser, focal_distance)
-                    # Take image and calculate image clarity
-                    val = laplacian(img)
-                    # Find the maximum image clarity
-                    if val > max_value:
-                        max_index = focal_distance
-                        max_value = val
-                    # If the image clarity starts to decrease
-                    if val < last_value:
-                        dec_count += 1
-                    else:
-                        dec_count = 0
-                    # Image clarity is reduced by six consecutive frames
-                    if dec_count < 6:
-                        last_value = val
-                        # Increase the focal distance
-                        focal_distance += 10
-                elif not focus_finished:
-                    # Adjust focus to the best
-                    focusing(focuser, max_index)
-                    focus_finished = True
-                    stop = time.time()
-                    print("Time taken to find focus:", stop - start)
+
+                dec_count, focal_distance, max_value, max_index, last_value, focus_finished, prev_img = check_image_clarity(img, dec_count, focal_distance, max_value, max_index, last_value, focus_finished, prev_img)
+
+                if focus_finished:
+                    # time.sleep(10)
+                    change = check_image_change(img, prev_img)
+                    # import ipdb; ipdb.set_trace()
+                    print("change")
+                    if py.any(change >= 5):
+                        print("change.any")
+                        focus_finished = False
+                        max_index, max_value, last_value, dec_count, focal_distance, focus_finished, display_specs, capture_specs, fr, prev_img = init_vars()
+
             else:
-                skip_frame = skip_frame - 2
-            if not focus_finished:
-                print("skip frame", skip_frame)
+                skip_frame = skip_frame - 1
+
             # This also acts as
             keyCode = cv2.waitKey(16) & 0xff
             # Stop the program on the ESC key
@@ -119,6 +156,7 @@ def show_camera(focuser):
                 dec_count = 0
                 focal_distance = 10
                 focus_finished = False
+ 
         cap.release()
         cv2.destroyAllWindows()
     else:
