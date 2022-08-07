@@ -59,10 +59,15 @@ def show_camera():
     skip_frame = 2
     if cap.isOpened():
         window_handle = cv2.namedWindow('CSI Camera', cv2.WINDOW_AUTOSIZE)
+        video_out = cv2.VideoWriter('output_video.avi',
+                                     cv2.VideoWriter_fourcc(*'DIVX'),
+                                     60,
+                                     (640, 360))
         # Window 
         while cv2.getWindowProperty('CSI Camera',0) >= 0:
             ret_val, img = cap.read()
             cv2.imshow('CSI Camera',img)
+            video_out.write(img)
             
             if skip_frame == 0:
                 skip_frame = 3 
@@ -106,6 +111,7 @@ def show_camera():
                 focal_distance = 10
                 focus_finished = False
         cap.release()
+        video_out.release()
         cv2.destroyAllWindows()
     else:
         print('Unable to open camera')
